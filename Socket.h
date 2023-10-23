@@ -17,10 +17,14 @@ public:
 
     static int createNonblocking();
 
-    int fd() const { return sockfd_; }
+    int fd() const
+    {
+        return sockfd_;
+    }
     void bindAddress(const InetAddress& loacladdr);
     void listen();
     int accept(InetAddress* peeraddr);
+    int connect(const InetAddress* serverAddr);
 
     void shutdownWrite();
 
@@ -28,6 +32,14 @@ public:
     void setReuseAddr(bool on);
     void setReusePort(bool on);
     void setKeepAlive(bool on);
+
+    struct sockaddr_in getLocalAddr(int sockfd);
+    struct sockaddr_in getPeerAddr(int sockfd);
+    bool isSelfConnect(int sockfd);
+
+    int getSocketError(int sockfd);
+
+    void close(int sockfd);
 
 private:
     const int sockfd_;

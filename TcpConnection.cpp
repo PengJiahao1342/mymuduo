@@ -16,8 +16,7 @@
 #include <unistd.h>
 
 // 用于构造函数检查传给loop_的参数是否为空指针
-static EventLoop*
-CheckLoopNotNull(EventLoop* loop)
+static EventLoop* CheckLoopNotNull(EventLoop* loop)
 {
     if (loop == nullptr) {
         LOG_FATAL("%s-%s-%d mainLoop is null!\n", __FILE__, __FUNCTION__, __LINE__);

@@ -53,6 +53,11 @@ int Socket::accept(InetAddress* peeraddr)
     return connfd;
 }
 
+int Socket::connect(const InetAddress* serverAddr)
+{
+    return ::connect(sockfd_, (sockaddr*)serverAddr->getSockAddr(), static_cast<socklen_t>(sizeof(sockaddr_in)));
+}
+
 // 关闭写端
 void Socket::shutdownWrite()
 {
@@ -89,4 +94,62 @@ void Socket::setKeepAlive(bool on)
 {
     int optval = on ? 1 : 0;
     ::setsockopt(sockfd_, SOL_SOCKET, SO_KEEPALIVE, &optval, static_cast<socklen_t>(sizeof optval));
+}
+
+// 通过sockfd来获取ip地址和端口号
+sockaddr_in Socket::getLocalAddr(int sockfd)
+{
+    sockaddr_in localaddr;
+    memset(&localaddr, 0, sizeof localaddr);
+    socklen_t addrlen = static_cast<socklen_t>(sizeof localaddr);
+
+    // getsockname用于获取sockfd自身的地址信息
+    if (::getsockname(sockfd, (sockaddr*)&localaddr, &addrlen) < 0) {
+        LOG_ERROR("Socket::getLocalAddr\n");
+    }
+
+    return localaddr;
+}
+sockaddr_in Socket::getPeerAddr(int sockfd)
+{
+    sockaddr_in peeraddr;
+    memset(&peeraddr, 0, sizeof peeraddr);
+    socklen_t addrlen = static_cast<socklen_t>(sizeof peeraddr);
+
+    // getpeername用于获取已经连接的sockfd的远端地址
+    if (::getpeername(sockfd, (sockaddr*)&peeraddr, &addrlen) < 0) {
+        LOG_ERROR("Socket::getPeerAddr\n");
+    }
+
+    return peeraddr;
+}
+
+// 环回连接或者配置错误可能会自己连接到自己
+bool Socket::isSelfConnect(int sockfd)
+{
+    sockaddr_in localaddr = getLocalAddr(sockfd);
+    sockaddr_in peeraddr = getPeerAddr(sockfd);
+
+    const sockaddr_in* laddr4 = static_cast<sockaddr_in*>(&localaddr);
+    const sockaddr_in* raddr4 = static_cast<sockaddr_in*>(&peeraddr);
+    return laddr4->sin_port == raddr4->sin_port
+        && laddr4->sin_addr.s_addr == raddr4->sin_addr.s_addr;
+}
+
+int Socket::getSocketError(int sockfd)
+{
+    int optval;
+    socklen_t optlen = static_cast<socklen_t>(sizeof optval);
+    if (::getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen) < 0) {
+        return errno;
+    } else {
+        return optval;
+    }
+}
+
+void Socket::close(int sockfd)
+{
+    if (::close(sockfd) < 0) {
+        LOG_ERROR("Socket::close\n");
+    }
 }

@@ -33,8 +33,10 @@ std::string Timestamp::toString() const
 }
 
 // test code
+// #include <iostream>
 // int main()
 // {
-//     std::cout << Timestamp::now().toString() <<std::endl;
+//     std::cout << Timestamp::now().toString() << std::endl;
+//     std::cout << addTime(Timestamp::now(), 1).toString() << std::endl;
 //     return 0;
 // }
