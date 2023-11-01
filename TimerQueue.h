@@ -10,7 +10,6 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <set>
 #include <utility>
 #include <vector>
@@ -34,7 +33,7 @@ public:
     void cancel(TimerId timerId);
 
 private:
-    using Entry = std::pair<Timestamp, Timer*>;
+    using Entry = std::pair<Timestamp, Timer*>; // Timer*
     using TimerList = std::set<Entry>;
     using ActiveTimer = std::pair<Timer*, int64_t>;
     using ActiveTimerSet = std::set<ActiveTimer>;
@@ -55,7 +54,7 @@ private:
     EventLoop* loop_;
     const int timerfd_;
     Channel timerfdChannel_;
-    TimerList timers_;
+    TimerList timers_; // 存储定时器和超时时间的表
 
     ActiveTimerSet activeTimers_;
     std::atomic_bool callingExpiredTimers_;

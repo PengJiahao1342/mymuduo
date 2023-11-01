@@ -1,11 +1,12 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
-#include <sys/types.h>
+#include "StringPiece.h.h"
 #pragma once
 #include <algorithm>
 #include <cstddef>
 #include <string>
+#include <sys/types.h>
 #include <vector>
 
 //
@@ -33,7 +34,7 @@ public:
 
     size_t readableBytes() const { return writeIndex_ - readerIndex_; }
 
-    size_t writalbeBytes() const { return buffer_.size() - writeIndex_; }
+    size_t writableBytes() const { return buffer_.size() - writeIndex_; }
 
     size_t prependableBytes() const { return readerIndex_; }
 
@@ -51,7 +52,8 @@ public:
 
     void retrieveAll()
     {
-        readerIndex_ = writeIndex_ = kCheapPrepend;
+        readerIndex_ = kCheapPrepend;
+        writeIndex_ = kCheapPrepend;
     }
 
     // 把onMessage函数上报的Buffer数据转成string
@@ -70,17 +72,31 @@ public:
     // 可写缓冲区大小buffer_.size() - writeIndex_ 要跟写数据长度len比较，空间不足需要扩容
     void ensureWritableBytes(size_t len)
     {
-        if (writalbeBytes() < len) {
+        if (writableBytes() < len) {
             makeSpace(len); // 扩容函数
         }
     }
 
+    void append(const StringPiece& str)
+    {
+        append(str.data(), str.size());
+    }
+    
     // 把data数据添加到writer缓冲区
     void append(const char* data, size_t len)
     {
         ensureWritableBytes(len);
         std::copy(data, data + len, beginWrite());
         writeIndex_ += len;
+    }
+
+    // prependable保留有8字节，在这个区域的末尾增加内容
+    // 并且把readerIndex_往前移动，使得readable区域连起来
+    void prepend(const void* data, size_t len)
+    {
+        readerIndex_ -= len;
+        const char* d = static_cast<const char*>(data);
+        std::copy(d, d + len, begin() + readerIndex_);
     }
 
     char* beginWrite()
@@ -96,6 +112,19 @@ public:
     ssize_t readFd(int fd, int* savedErrno);
     // 通过fd发送数据
     ssize_t writeFd(int fd, int* savedErrno);
+
+    // 从readable区域开始查找\r\n
+    const char* findCRLF() const
+    {
+        const char* crlf = std::search(peek(), beginWrite(), kCRLF, kCRLF + 2);
+        return crlf == beginWrite() ? nullptr : crlf;
+    }
+    // 从start始查找\r\n
+    const char* findCRLF(const char* start) const
+    {
+        const char* crlf = std::search(start, beginWrite(), kCRLF, kCRLF + 2);
+        return crlf == beginWrite() ? nullptr : crlf;
+    }
 
 private:
     // 返回buffer_的首地址
@@ -113,7 +142,7 @@ private:
     {
         // prependableBytes返回readerIndex_，如果读取一部分数据，reader缓冲区能空出一部分空间写数据
         // writer缓冲区+空出的reader缓冲区不足以写数据就需要扩容
-        if (writalbeBytes() + prependableBytes() < len + kCheapPrepend) {
+        if (writableBytes() + prependableBytes() < len + kCheapPrepend) {
             buffer_.resize(writeIndex_ + len);
         } else {
             // 如果空间够，把未读的数据拷贝到读缓冲区头部，将已读空间和writer缓冲区连起来
@@ -129,6 +158,8 @@ private:
     std::vector<char> buffer_; // vector方便扩容
     size_t readerIndex_;
     size_t writeIndex_;
+
+    static const char kCRLF[]; // /r/n标识
 };
 
 #endif

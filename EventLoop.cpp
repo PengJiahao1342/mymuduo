@@ -3,6 +3,8 @@
 #include "CurrentThread.h"
 #include "Logger.h"
 #include "Poller.h"
+#include "TimerQueue.h"
+#include "Timestamp.h"
 
 #include <cerrno>
 #include <cstdint>
@@ -11,6 +13,7 @@
 #include <sys/eventfd.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 // 防止一个线程创建多个EventLoop
@@ -35,6 +38,7 @@ EventLoop::EventLoop()
     , callingPendingFunctors_(false)
     , threadId_(CurrentThread::tid())
     , poller_(Poller::newDefaultPoller(this))
+    , timerQueue_(new TimerQueue(this))
     , wakeupFd_(createEventfd())
     , wakeupChannel_(new Channel(this, wakeupFd_)) // 相当于每个EventLoop都监听自己的wakeupFd_
 {
@@ -180,4 +184,31 @@ void EventLoop::doPendingFunctors()
     }
 
     callingPendingFunctors_ = false;
+}
+
+// 定时器操作函数，用于添加定时器任务
+// 立即运行回调并且不重复执行
+TimerId EventLoop::runAt(Timestamp time, TimerCallback cb)
+{
+    return timerQueue_->addTimer(std::move(cb), time, 0.0);
+}
+
+// delay秒后运行回调
+TimerId EventLoop::runAfter(double delay, TimerCallback cb)
+{
+    Timestamp time(addTime(Timestamp::now(), delay));
+    return runAt(time, std::move(cb));
+}
+
+// 每隔interval时间后运行回调
+TimerId EventLoop::runEvery(double interval, TimerCallback cb)
+{
+    Timestamp time(addTime(Timestamp::now(), interval));
+    return timerQueue_->addTimer(std::move(cb), time, interval);
+}
+
+// 取消定时器
+void EventLoop::cancel(TimerId timerId)
+{
+    return timerQueue_->cancel(timerId);
 }

@@ -33,9 +33,9 @@ public:
     void setReusePort(bool on);
     void setKeepAlive(bool on);
 
-    struct sockaddr_in getLocalAddr(int sockfd);
-    struct sockaddr_in getPeerAddr(int sockfd);
-    bool isSelfConnect(int sockfd);
+    static struct sockaddr_in getLocalAddr(int sockfd);
+    static struct sockaddr_in getPeerAddr(int sockfd);
+    static bool isSelfConnect(int sockfd);
 
     int getSocketError(int sockfd);
 

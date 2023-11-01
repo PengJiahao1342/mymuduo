@@ -5,15 +5,28 @@
 #include "Logger.h"
 #include "Socket.h"
 
-#include <asm-generic/errno-base.h>
-#include <asm-generic/errno.h>
-#include <asm-generic/socket.h>
 #include <cerrno>
 #include <cstddef>
 #include <functional>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+void defaultConnectionCallback(const TcpConnectionPtr& conn)
+{
+    if (conn->connected()) {
+        LOG_INFO("%s -> %s is up\n",
+            conn->localAddress().toIpPort().c_str(), conn->peerAddress().toIpPort().c_str());
+    } else {
+        LOG_INFO("%s -> %s is down\n",
+            conn->localAddress().toIpPort().c_str(), conn->peerAddress().toIpPort().c_str());
+    }
+}
+
+void defaultMessageCallback(const TcpConnectionPtr& conn, Buffer* buf, Timestamp)
+{
+    buf->retrieveAll();
+}
 
 // 用于构造函数检查传给loop_的参数是否为空指针
 static EventLoop* CheckLoopNotNull(EventLoop* loop)
@@ -62,7 +75,20 @@ void TcpConnection::send(const std::string& buf)
         if (loop_->isInLoopThread()) {
             sendInLoop(buf.c_str(), buf.size());
         } else {
-            loop_->runInloop(std::bind(&TcpConnection::sendInLoop, shared_from_this(), buf.c_str(), buf.size()));
+            loop_->runInloop(std::bind(&TcpConnection::sendInLoop, this, buf.c_str(), buf.size()));
+        }
+    }
+}
+
+void TcpConnection::send(Buffer* buf)
+{
+    if (state_ == kConnected) {
+        if (loop_->isInLoopThread()) {
+            sendInLoop(buf->peek(), buf->readableBytes());
+            buf->retrieveAll();
+        } else {
+            loop_->runInloop(std::bind(&TcpConnection::sendInLoop, this,
+                buf->retrieveAllAsString().c_str(), buf->retrieveAllAsString().size()));
         }
     }
 }
@@ -93,7 +119,7 @@ void TcpConnection::sendInLoop(const void* data, size_t len)
         } else { // nwrote < 0
             nwrote = 0;
             if (errno != EWOULDBLOCK) {
-                LOG_ERROR("TcpConnection::sendInLoop");
+                LOG_ERROR("TcpConnection::sendInLoop\n");
                 if (errno == EPIPE || errno == ECONNRESET) { // SIGPIPE RESET
                     faultError = true;
                 }
@@ -114,7 +140,7 @@ void TcpConnection::sendInLoop(const void* data, size_t len)
             loop_->queueInloop(std::bind(highWaterMarkCallback_, shared_from_this(), oldLen + remaining));
         }
         // remaining的数据写入缓冲区
-        outputBuffer_.append((char*)(data) + nwrote, remaining);
+        outputBuffer_.append(static_cast<const char*>(data) + nwrote, remaining);
         if (!channel_->isWriting()) {
             channel_->enableWriting(); // 注册Channel的写事件，Poller会给Channel通知EPOLLOUT事件
         }
@@ -125,7 +151,7 @@ void TcpConnection::shutdown()
 {
     if (state_ == kConnected) {
         setState(kDisconnecting);
-        loop_->runInloop(std::bind(&TcpConnection::shutdownInLoop, shared_from_this()));
+        loop_->runInloop(std::bind(&TcpConnection::shutdownInLoop, this));
     }
 }
 void TcpConnection::shutdownInLoop()
@@ -135,6 +161,21 @@ void TcpConnection::shutdownInLoop()
         // (revents_ & EPOLLHUP) && !(revents_ & EPOLLIN) 回调closeCallback_
         // 即初始化TcpConnection时绑定的TcpConnection::handleClose
         socket_->shutdownWrite();
+    }
+}
+
+void TcpConnection::forceClose()
+{
+    if (state_ == kConnected || state_ == kDisconnected) {
+        setState(kDisconnecting);
+        loop_->queueInloop(std::bind(&TcpConnection::forceCloseInLoop, shared_from_this()));
+    }
+}
+
+void TcpConnection::forceCloseInLoop()
+{
+    if (state_ == kConnected || state_ == kDisconnecting) {
+        handleClose();
     }
 }
 
@@ -159,6 +200,11 @@ void TcpConnection::connectDestroyed()
         connectionCallback_(shared_from_this());
     }
     channel_->remove(); // 在Poller中删除Channel
+}
+
+void TcpConnection::setTcpNoDelay(bool on)
+{
+    socket_->setTcpNoDelay(on);
 }
 
 void TcpConnection::handleRead(Timestamp receiveTime)

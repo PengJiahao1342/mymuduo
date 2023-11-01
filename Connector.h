@@ -16,6 +16,7 @@ class Socket;
 //
 // 类似于Acceptor封装listenfd用于监听客户端连接
 // Connector被TcpClient调用，用于封装connfd的通信套接字
+// 只用于连接socket
 //
 class Connector : noncopyable, public std::enable_shared_from_this<Connector> {
 public:
@@ -45,7 +46,7 @@ private:
         kConnected
     };
 
-    void setState(States s) { state_ = s; }
+    void setState(States s) { state_ = static_cast<int>(s); }
     void startInLoop();
     void stopInLoop();
     void connect();
@@ -58,14 +59,14 @@ private:
     void resetChannel();
 
     static const int kMaxRetryDelayMs = 30 * 1000; // 尝试超时连接最大时间为30s
-    static const int kInitRetryDelayMs = 500; // 最初重连时间为500ms 每次重连重连时间翻倍
+    static const int kInitRetryDelayMs = 500; // 最初重连时间为500ms 每次重连重连时间翻倍直到30s
 
     EventLoop* loop_;
     std::unique_ptr<Channel> channel_; // 这个Channel的任务只负责连接，连接完成后释放并且把sockfd给TcpClient
     std::unique_ptr<Socket> socket_; // socket_用于使用socket相关方法
     InetAddress serverAddr_;
     std::atomic_bool connect_;
-    std::atomic<States> state_;
+    std::atomic_int state_;
     NewConnectionCallback newConnectionCallback_;
     int retryDelayMs_;
 };

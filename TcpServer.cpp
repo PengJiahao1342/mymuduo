@@ -1,5 +1,6 @@
 #include "TcpServer.h"
 #include "Logger.h"
+#include "Socket.h"
 #include "TcpConnection.h"
 
 #include <cstdio>
@@ -25,8 +26,8 @@ TcpServer::TcpServer(EventLoop* loop, const InetAddress& listenAddr, const std::
     , name_(nameArg)
     , acceptor_(new Acceptor(loop, listenAddr, option == kReusePort))
     , threadPool_(new EventLoopThreadPool(loop, name_))
-    , connectionCallback_()
-    , messageCallback_()
+    , connectionCallback_(defaultConnectionCallback)
+    , messageCallback_(defaultMessageCallback)
     , nextConnId_(1)
     , started_(0)
 {
@@ -80,13 +81,13 @@ void TcpServer::newConnection(int sockfd, const InetAddress& peerAddr)
         name_.c_str(), connName.c_str(), peerAddr.toIpPort().c_str());
 
     // 通过sockfd获取其绑定的本机ip地址和端口号
-    sockaddr_in localaddr;
-    ::bzero(&localaddr, sizeof localaddr);
-    socklen_t addrlen = static_cast<socklen_t>(sizeof localaddr);
-    if (::getsockname(sockfd, (sockaddr*)&localaddr, &addrlen) < 0) {
-        LOG_ERROR("sockets::getLoaclAddr\n");
-    }
-    InetAddress localAddr(localaddr);
+    // sockaddr_in localaddr;
+    // ::bzero(&localaddr, sizeof localaddr);
+    // socklen_t addrlen = static_cast<socklen_t>(sizeof localaddr);
+    // if (::getsockname(sockfd, (sockaddr*)&localaddr, &addrlen) < 0) {
+    //     LOG_ERROR("sockets::getLoaclAddr\n");
+    // }
+    InetAddress localAddr(Socket::getLocalAddr(sockfd));
 
     // 根据连接成功的sockfd，创建TcpConnection对象  localAddr--服务器 peerAddr--客户端
     TcpConnectionPtr conn(new TcpConnection(

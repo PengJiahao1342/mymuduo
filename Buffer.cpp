@@ -5,16 +5,21 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+const char Buffer::kCRLF[] = "\r\n";
+
+const size_t Buffer::kCheapPrepend; // 一次准备读取字节数可以写在头部
+const size_t Buffer::kInitialSize; // 缓冲区大小
+
 // 从fd中读取数据 Poller工作在LT模式，能保证数据读完
 // Buffer缓冲区有大小，但是从fd上读取数据时并不知道TCP数据最终的大小
 // 这里使用readv系统调用，Buffer缓冲区+函数栈上的空间进行读取
 ssize_t Buffer::readFd(int fd, int* savedErrno)
 {
-    char extrabuf[65536] = { 0 }; // 栈上内存空间，64K
+    char extrabuf[65536]; // 栈上内存空间，64K
 
     struct iovec vec[2];
 
-    const size_t writable = writalbeBytes(); // writable是Buffer缓冲区剩余可写空间大小
+    const size_t writable = writableBytes(); // writable是Buffer缓冲区剩余可写空间大小
 
     vec[0].iov_base = begin() + writeIndex_;
     vec[0].iov_len = writable;

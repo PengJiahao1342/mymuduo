@@ -35,21 +35,36 @@
 
 7. `TcpServer`为对外服务器编程使用的类，`start()`开启`mainLoop`后，创建`loop`线程池并且`mainLoop`开始监听，每个线程都开始运行一个`EventLoop`，有新连接到来通过轮询分发至某一个`EventLoop`
 
+8. `TimerQueue`、`TimerId`、`Timer`三个定时器类组成了网络库的定时器。一个`TimerQueue`关联一个`EventLoop`，一个`TimerQueue`绑定一个`timerfd_create()`创建出的类似文件描述符的`timerfd`和封装他的`Channel`。
+
+9. `Connector`类，类似于`Acceptor`类，用于给`TcpClient`创建监听`connfd`用于通信，值得注意的是，`Connector`并不持有`connfd`，而是在`newConnectionCallback_`回调中把`connfd`的所有权给了`TcpClient`，因为`Connector`类与`TcpClient`在相同的loop中，只能存在一份connfd和封装他的`Channel`.
+
+10. `TcpClient`类用于创建客户端，功能与`TcpServer`类似，不同的是`TcpClient`只需要专注于连接的建立与断开，信息的收发等功能。
+
 ## 技术亮点
 
 1. 采用C++11重写`muduo`网络库核心功能，无需依赖于`boost`库，在编译阶段更加简化，并且只需包含` <mymuduo/TcpServer.h>`头文件即可实现服务器编程
+
 2. `muduo`采用`Reactor`模型和多线程结合的方式，实现了高并发非阻塞网络库。采用大量回调函数使得业务代码和核心编程代码分离，用户使用时只需要在编程时设置`ConnectionCallback`、`MessageCallback`、`WriteCompleteCallback`回调函数，`muduo`库触发相应条件时会自动调用用户设置的函数
+
 3. `EventLoop`中采用系统调用`eventfd`创建一个`wakeupfd`快速实现事件的等待于通知，`wakeupfd`绑定`EPOLLIN`读事件，当`mainLoop`需要唤醒`subLoop`时，向`wakeupfd`写入数据即可唤醒，增加了通知效率
+
 4. `Thread`中的`EventLoop`运行在栈上，通过条件变量确保获取运行的`EventLoop`指针，大大减小分配在堆中的空间，并且自动释放，避免出现内存泄漏
+
 5. `Buffer`模块API设置为直接传入`string`而不是`Buffer`对象，便于用户调用
+
 6. `Logger`日志模块采用格式化字符串方式输出，并且提供用户设置日志等级，在其他编程时也可以方便调用
+
+7. `StringPiece.h`模块采用谷歌设计的接口，允许客户轻松传入一个`const char*`或者`string`，指向另一块内存的类字符串对象。
 
 ## TODO
 
-- [ ] 定时器相关类
+- [x] example目录下增加测试案例，已增加`simepleTCP`几个简单的TCP测试案例，`chatServer`简单的聊天服务器
 
-- [ ] `TcpClient`编写客户端类
+- [x] 定时器相关类
 
-- [ ] 支持DNS、HTTP、RPC等
+- [x] `TcpClient`编写客户端类
+
+- [x] 支持HTTP等，现已支持HTTP，`http`目录下有简单的HTTP测试代码
 
 - [ ] 服务器性能测试 

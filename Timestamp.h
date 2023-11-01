@@ -11,6 +11,11 @@ public:
     Timestamp();
     explicit Timestamp(int64_t microSecondsSinceEpoch); // explicit 防止int64_t与Timestamp类型隐式转换
 
+    void swap(Timestamp& that)
+    {
+        std::swap(microSecondsSinceEpoch_, that.microSecondsSinceEpoch_);
+    }
+
     static Timestamp now();
     static Timestamp invalid() { return Timestamp(); }
 

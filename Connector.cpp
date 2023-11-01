@@ -11,11 +11,13 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+const int Connector::kMaxRetryDelayMs;
+
 Connector::Connector(EventLoop* loop, const InetAddress& serverAddr)
     : loop_(loop)
     , serverAddr_(serverAddr)
     , connect_(false)
-    , state_(kDisconnected)
+    , state_(static_cast<int>(kDisconnected))
     , retryDelayMs_(kInitRetryDelayMs)
 {
     LOG_DEBUG("connector[%p]\n", this);
@@ -31,7 +33,7 @@ Connector::~Connector()
 void Connector::start()
 {
     connect_ = true;
-    loop_->runInloop(std::bind(&Connector::startInLoop, shared_from_this()));
+    loop_->runInloop(std::bind(&Connector::startInLoop, this));
 }
 
 void Connector::startInLoop()
@@ -57,11 +59,11 @@ void Connector::connect()
     case EINPROGRESS:
     case EINTR:
     case EISCONN:
-        // 连接成功
+        // socket可写表示已经连接 还需要用getsockopt确认一下SOERROR
         connecting(socket_->fd());
         break;
 
-    case EAGAIN:
+    case EAGAIN: // 是真的错误，表示临时端口用完，需要关闭socket再重试
     case EADDRINUSE:
     case EADDRNOTAVAIL:
     case ECONNREFUSED:
@@ -94,8 +96,8 @@ void Connector::connecting(int sockfd)
 
     // 将sockfd封装进Channel并设置回调函数
     channel_.reset(new Channel(loop_, sockfd));
-    channel_->setWriteCallBack(std::bind(&Connector::handleWrite, shared_from_this()));
-    channel_->setErrorCallBack(std::bind(&Connector::handleError, shared_from_this()));
+    channel_->setWriteCallBack(std::bind(&Connector::handleWrite, this));
+    channel_->setErrorCallBack(std::bind(&Connector::handleError, this));
     // 开启EPOLLOUT写事件监听并添加到Poller中
     channel_->enableWriting();
 }
@@ -111,6 +113,8 @@ void Connector::retry(int sockfd)
     if (connect_) {
         LOG_INFO("Connector::retry - Retry connecting to %s in %d milliseconds.\n",
             serverAddr_.toIpPort().c_str(), retryDelayMs_);
+        // *****测试程序时用单一的connector，用shared_from_this()会使用失败，connector没有用智能指针管理*****
+        // 但是TcpClient用智能指针管理connector应该没问题
         loop_->runAfter(retryDelayMs_ / 1000.0,
             std::bind(&Connector::startInLoop, shared_from_this()));
         retryDelayMs_ = std::min(retryDelayMs_ * 2, kMaxRetryDelayMs);
@@ -135,12 +139,12 @@ void Connector::restart()
 void Connector::stop()
 {
     connect_ = false;
-    loop_->queueInloop(std::bind(&Connector::stopInLoop, shared_from_this()));
+    loop_->queueInloop(std::bind(&Connector::stopInLoop, this));
 }
 
 void Connector::stopInLoop()
 {
-    if (state_ == kConnecting) {
+    if (state_ == static_cast<int>(kConnecting)) {
         setState(kDisconnected);
         int sockfd = removeAndResetChannel();
         retry(sockfd);
@@ -152,7 +156,7 @@ void Connector::handleWrite()
     LOG_INFO("Connector::handleWrite state=%d\n", (int)state_);
 
     // 连接状态才能进行写，disConnected状态无法进入
-    if (state_ == kConnecting) {
+    if (state_ == static_cast<int>(kConnecting)) {
         // 连接成功后Channel的任务就完成了
         // 释放并且把sockfd保存，等待将sockfd所有权给TcpClient
         int sockfd = removeAndResetChannel();
@@ -186,7 +190,7 @@ void Connector::handleError()
 
     // 处于正在连接状态 即把sockfd封装进Channel的过程出现错误
     // 清除sockfd的Channel并且取消Poller绑定
-    if (state_ == kConnecting) {
+    if (state_ == static_cast<int>(kConnecting)) {
         int sockfd = removeAndResetChannel();
 
         int err = socket_->getSocketError(sockfd);
@@ -206,7 +210,7 @@ int Connector::removeAndResetChannel()
     int sockfd = channel_->fd();
 
     // 在这里需要通过subloop来重置Channel，因为内置了Channel::handleEvent会自动处理
-    loop_->queueInloop(std::bind(&Connector::resetChannel, shared_from_this()));
+    loop_->queueInloop(std::bind(&Connector::resetChannel, this));
     return sockfd;
 }
 

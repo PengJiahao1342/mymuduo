@@ -8,6 +8,7 @@
 #include "Timestamp.h"
 #include "noncopyable.h"
 
+#include <any>
 #include <atomic>
 #include <cstddef>
 #include <memory>
@@ -16,6 +17,9 @@
 class Channel;
 class EventLoop;
 class Socket;
+
+void defaultConnectionCallback(const TcpConnectionPtr& conn);
+void defaultMessageCallback(const TcpConnectionPtr& conn, Buffer* buf, Timestamp);
 
 //
 // TcpServer => Acceptor => 有新用户连接，通过accept函数拿到connfd
@@ -38,7 +42,8 @@ public:
     bool connected() const { return state_ == kConnected; }
     bool disconnected() const { return state_ == kDisconnected; }
 
-    void send(const std::string &buf); // 发送数据
+    void send(const std::string& buf); // 发送数据
+    void send(Buffer* buf); // 发送数据
     void shutdown(); // 关闭连接
 
     void setConnectionCallback(const ConnectionCallback& cb) { connectionCallback_ = cb; }
@@ -47,8 +52,17 @@ public:
     void setHighWaterMarkCallback(const HighWaterMarkCallback& cb) { highWaterMarkCallback_ = cb; }
     void setCloseCallback(const CloseCallback& cb) { closeCallback_ = cb; }
 
+    void setTcpNoDelay(bool on);
+
     void connectEstablished(); // 建立连接
     void connectDestroyed(); // 销毁连接
+
+    void forceClose();
+
+    // 设置/获取上下文信息，可以保存任意一个需要保存的变量
+    void setContext(const std::any& context) { context_ = context; }
+    const std::any& getContext() const { return context_; }
+    std::any* getMutableContext() { return &context_; }
 
 private:
     enum StateE {
@@ -67,6 +81,7 @@ private:
 
     void sendInLoop(const void* data, size_t len);
     void shutdownInLoop();
+    void forceCloseInLoop();
 
     EventLoop* loop_; // 这里不是baseloop，因为TcpConnection都在subloop中管理
     const std::string name_;
@@ -88,6 +103,8 @@ private:
     size_t hightWaterMark_;
     Buffer inputBuffer_; // 接收数据的缓冲区
     Buffer outputBuffer_; // 发送数据的缓冲区
+
+    std::any context_;
 };
 
 #endif

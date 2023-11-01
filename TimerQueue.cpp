@@ -42,7 +42,7 @@ static void readTimerfd(int timerfd, Timestamp now)
 }
 
 // when传入的是超时时间 返回距离当前时间的timespec
-struct timespec howMuchTimeFromNow(Timestamp when)
+static struct timespec howMuchTimeFromNow(Timestamp when)
 {
     int64_t microseconds = when.microSecondsSinceEpoch() - Timestamp::now().microSecondsSinceEpoch();
 

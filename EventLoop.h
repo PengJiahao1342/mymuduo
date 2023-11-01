@@ -1,6 +1,8 @@
 #ifndef EVENTLOOP_H
 #define EVENTLOOP_H
 
+#include "Callbacks.h"
+#include "TimerId.h"
 #pragma once
 #include "CurrentThread.h"
 #include "Timestamp.h"
@@ -15,6 +17,7 @@
 
 class Channel;
 class Poller;
+class TimerQueue;
 
 class EventLoop : noncopyable {
 public:
@@ -41,6 +44,12 @@ public:
     // 判断EventLoop对象是否在自己线程里面
     bool isInLoopThread() const { return threadId_ == CurrentThread::tid(); }
 
+    // 定时器操作函数，用于添加定时器任务
+    TimerId runAt(Timestamp time, TimerCallback cb); // 立即运行回调
+    TimerId runAfter(double delay, TimerCallback cb); // delay秒后运行回调
+    TimerId runEvery(double interval, TimerCallback cb); // 每隔interval时间后运行回调
+    void cancel(TimerId timerId); // 取消定时器
+
 private:
     void handleRead(); // waked up
     void doPendingFunctors(); // 处理回调函数
@@ -54,6 +63,8 @@ private:
 
     Timestamp pollReturnTime_; // poller返回发生事件的Channels的时间点
     std::unique_ptr<Poller> poller_; // 管理Poller的指针
+
+    std::unique_ptr<TimerQueue> timerQueue_; // 用于处理定时器相关
 
     int wakeupFd_; // 主要作用，当mainLoop获取一个新用户的Channel，通过轮询算法选择一个subloop即Reactor，通过该成员变量唤醒subloop处理Channel
     std::unique_ptr<Channel> wakeupChannel_;
