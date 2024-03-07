@@ -57,6 +57,26 @@
 
 7. `StringPiece.h`模块采用谷歌设计的接口，允许客户轻松传入一个`const char*`或者`string`，指向另一块内存的类字符串对象。
 
+## 服务器压力测试
+使用`wrk`工具对`mymuduo`实现的HTTP服务器进行压力测试
+测试开始前，应保证系统有足够多的临时端口和文件描述符可以使用
+`sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"`临时修改系统可用端口数到65535
+`ulimit -n 65535`临时修改系统可以文件描述符数量到65535
+
+压力测试环境
+- Linux kernel version 6.2.0-34-generic
+- Ubuntu 22.04
+- VM虚拟机下使用8核处理器，4G内存，wrk压测工具与HTTP服务器运行在同一机器
+- 测试线程数量为16（2倍CPU核心数），模拟1000个并发请求，持续30秒
+- `wrk -t16 -c1000 -d30s http://192.168.110.132:9000/`
+
+测试结果
+
+在当前测试环境下，QPS（每秒查询率/最大吞吐量）约为8000，如果wrk与HTTP服务器分离测试或增大CPU核心数，目前实现的HTTP服务器应该能够应对上万的高并发连接
+
+<img width="634" alt="wrk压测mymuduo" src="https://github.com/PengJiahao7890/mymuduo/assets/117962918/70b6ead7-42cd-4aa3-88b9-16d22c0b3ab7">
+
+
 ## TODO
 
 - [x] example目录下增加测试案例，已增加`simepleTCP`几个简单的TCP测试案例，`chatServer`简单的聊天服务器
@@ -65,6 +85,6 @@
 
 - [x] `TcpClient`编写客户端类
 
-- [x] 支持HTTP等，现已支持HTTP，`http`目录下有简单的HTTP测试代码
+- [x] 支持HTTP，`http`目录下有简单的HTTP测试代码
 
-- [ ] 服务器性能测试 
+- [x] 服务器性能测试，已使用wrk对HTTP服务器进行压力测试，后续考虑使用JMeter测试TCP服务器性能
