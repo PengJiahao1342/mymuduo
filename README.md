@@ -15,7 +15,7 @@
 
 测试用例在`example/`目录，进入目录执行`make`可生成测试可执行文件
 
-使用`mymuduo`进行服务器编程时，只需包含` <mymuduo/TcpServer.h>`头文件
+使用`mymuduo`进行服务器编程时，只需包含`<mymuduo/TcpServer.h>`头文件
 
 ## 核心模块介绍
 
@@ -27,7 +27,7 @@
 
 3. `EventLoop`模块对应`Reator`反应堆，用于开启事件循环，封装`Channel`、`Poller`，实现事件的轮询检测以及事件分发处理
 
-4. `Thread`、`EventLoopThread`、`EventLoopThreadPoll`实现线程池的封装，采用轮询算法获取下一个`subLoop`，每一个`thread`运行一个`EventLoop`，实现`one loop per thread`
+4. `Thread`、`EventLoopThread`、`EventLoopThreadPoll`实现线程池的封装，采用轮询算法获取下一个`subLoop`，每一个`thread`运行一个`EventLoop`，实现`one loop per thread`。线程池退出时不需要释放`EventLoop`，因为它是由`thread`的线程函数创建的，运行在`EventLoopThread::threadFunc()`栈上，出函数自动释放。
 
 5. `Acceptor`封装了`listenfd`相关操作，运行在`mainLoop`中监听新连接
 
@@ -51,7 +51,7 @@
 
 4. `Thread`中的`EventLoop`运行在栈上，通过条件变量确保获取运行的`EventLoop`指针，大大减小分配在堆中的空间，并且自动释放，避免出现内存泄漏
 
-5. `Buffer`模块API设置为直接传入`string`而不是`Buffer`对象，便于用户调用
+5. `Buffer`模块模仿netty的ChannelBuffer构造的一个缓冲区，由prependable bytes, readable bytes, writable bytes三部分构成，prependable bytes预留8字节空间，后续可以用于存储需要读取的字节数，防止TCP的粘包问题。API设置为直接传入`string`而不是`Buffer`对象，便于用户调用。
 
 6. `Logger`日志模块采用格式化字符串方式输出，并且提供用户设置日志等级，在其他编程时也可以方便调用
 
